@@ -22,7 +22,7 @@ async def sync(token: str, reader: StreamReader, writer: StreamWriter,
     async with aiohttp.ClientSession(connector=connector) as session:
         spot = Spotify(session, token)
         await asyncio.wait([
-            publish(writer, spot, server=server),
+            publish(writer, spot, server=server) if server else
             subscribe(reader, spot)
         ], return_when=asyncio.FIRST_COMPLETED)
 
