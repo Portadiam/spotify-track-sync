@@ -7,8 +7,12 @@ from args import Arguments
 import sync
 
 
+LOG_FORMAT = '[%(relativeCreated)6d %(levelname)10s \
+%(filename)10s:%(lineno)4s %(funcName)15s() ] %(message)s'
+
+
 def main(args: Arguments) -> None:
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
     async def serve(reader: StreamReader, writer: StreamWriter) -> None:
         await sync.sync(args.token, reader, writer, server=True)

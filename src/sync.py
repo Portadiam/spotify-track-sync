@@ -13,6 +13,8 @@ ChangeFunc = Callable[[Spotify], Awaitable]
 
 lock = Lock()
 
+logger = logging.getLogger(__name__)
+
 
 async def sync(token: str, reader: StreamReader, writer: StreamWriter,
                *, server: bool=False) -> None:
@@ -63,8 +65,6 @@ def encode(state: JsonObject) -> bytes:
 
 async def publish(writer: StreamWriter, spot: Spotify, *, server: bool=False
                   ) -> None:
-    logger = logging.getLogger('publish')
-
     if server:
         logger.info('Publish to newcomer')
         try:
@@ -115,7 +115,6 @@ async def safe_update(message: Message, spot: Spotify) -> None:
 
 
 async def subscribe(reader: StreamReader, spot: Spotify) -> None:
-    logger = logging.getLogger('subscribe')
     logger.info('Subscribe ready')
     while True:
         try:
