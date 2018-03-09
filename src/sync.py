@@ -2,7 +2,7 @@ import asyncio
 from asyncio import StreamReader, StreamWriter, Lock
 import aiohttp
 import logging
-from typing import Dict, Any, Callable, Awaitable, NamedTuple
+from typing import Dict, Any, Callable, Awaitable, NamedTuple, Optional
 import json
 
 from spotify import Spotify
@@ -89,14 +89,18 @@ class Message(NamedTuple):
     pause: bool
 
     @staticmethod
-    def from_json(state: JsonObject) -> 'Message':
-        return Message(
-            uri=state['uri'], seek=state['seek'], pause=state['pause']
-        )
+    def from_json(state: JsonObject) -> Optional['Message']:
+        try:
+            return Message(
+                uri=state['uri'], seek=state['seek'], pause=state['pause']
+            )
+        except KeyError:
+            return None
 
 
 def is_update(new: Message, old: Message) -> bool:
     return (
+        old is None or
         new.uri != old.uri or
         abs(new.seek - old.seek) > 5 or
         new.pause != old.pause
