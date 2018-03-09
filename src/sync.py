@@ -76,8 +76,10 @@ async def publish(writer: StreamWriter, spot: Spotify, *, server: bool=False
             logger.info('Publish waiting')
             writer.write(encode(await next_safe_state(spot)))
         except KeyError:
+            logger.warning('KeyError during loop')
             pass
         except ConnectionResetError:
+            logger.warning('ConnectionResetError during loop')
             return
 
 
@@ -124,4 +126,5 @@ async def subscribe(reader: StreamReader, spot: Spotify) -> None:
 
             await safe_update(message, spot)
         except ConnectionResetError:
+            logger.warning('ConnectionResetError during loop')
             return
