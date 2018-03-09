@@ -1,5 +1,4 @@
 import argparse
-import sys
 import webbrowser
 
 from typing import TYPE_CHECKING
