@@ -92,7 +92,7 @@ class Message(NamedTuple):
     def from_json(state: JsonObject) -> Optional['Message']:
         try:
             return Message(
-                uri=state['uri'], seek=state['seek'], pause=state['pause']
+                uri=uri(state), seek=position(state), pause=not playing(state)
             )
         except KeyError:
             return None
