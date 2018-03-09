@@ -68,7 +68,7 @@ async def publish(writer: StreamWriter, spot: Spotify, *, server: bool=False
     if server:
         logger.info('Publish to newcomer')
         try:
-            writer.write(encode(await next_safe_state(spot)))
+            writer.write(encode(await spot.get_playing()))
         except KeyError:
             logger.info('Can\'t publish because no initial track')
 
