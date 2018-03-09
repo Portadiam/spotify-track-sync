@@ -57,7 +57,7 @@ def serialize(state: JsonObject) -> str:
     return json.dumps(message)
 
 
-async def encode(state: JsonObject) -> bytes:
+def encode(state: JsonObject) -> bytes:
     return f'{serialize(state)}\n'.encode()
 
 
@@ -68,14 +68,14 @@ async def publish(writer: StreamWriter, spot: Spotify, *, server: bool=False
     if server:
         logger.info('Publish to newcomer')
         try:
-            writer.write(await encode(await next_safe_state(spot)))
+            writer.write(encode(await next_safe_state(spot)))
         except KeyError:
             logger.info('Can\'t publish because no initial track')
 
     while True:
         try:
             logger.info('Publish waiting')
-            writer.write(await encode(await next_safe_state(spot)))
+            writer.write(encode(await next_safe_state(spot)))
         except KeyError:
             pass
         except ConnectionResetError:
