@@ -44,9 +44,8 @@ async def next_safe_state(spot: Spotify) -> JsonObject:
 
     state = await spot.get_playing(block=True)
     if lock.locked():
-        await lock.acquire()
-        state = await spot.get_playing()
-        lock.release()
+        with await lock:
+            state = await spot.get_playing()
     return state
 
 
@@ -105,13 +104,12 @@ def is_update(new: Message, old: Message) -> bool:
 async def safe_update(message: Message, spot: Spotify) -> None:
     global lock
 
-    await lock.acquire()
-    old_state = Message.from_json(await spot.get_playing())
-    if is_update(message, old_state):
-        await spot.play(message.uri, message.seek)
-        if message.pause:
-            await spot.pause()
-    lock.release()
+    with await lock:
+        old_state = Message.from_json(await spot.get_playing())
+        if is_update(message, old_state):
+            await spot.play(message.uri, message.seek)
+            if message.pause:
+                await spot.pause()
 
 
 async def subscribe(reader: StreamReader, spot: Spotify) -> None:
