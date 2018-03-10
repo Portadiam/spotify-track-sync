@@ -16,6 +16,29 @@ lock = Lock()
 logger = logging.getLogger(__name__)
 
 
+class State(NamedTuple):
+    uri: str
+    seek: int
+    pause: bool
+
+    @staticmethod
+    def from_json(state: JsonObject) -> Optional['State']:
+        try:
+            return State(
+                uri=state['track']['track_resource']['uri'],
+                seek=int(state['position']),
+                pause=not state['playing']
+            )
+        except KeyError:
+            return None
+
+    def json(self) -> JsonObject:
+        return self._asdict()
+
+    def serialize(self) -> str:
+        return json.dumps(self.json())
+
+
 async def sync(token: str, reader: StreamReader, writer: StreamWriter,
                *, server: bool=False) -> None:
     connector = aiohttp.TCPConnector(resolver=aiohttp.AsyncResolver())
@@ -27,39 +50,18 @@ async def sync(token: str, reader: StreamReader, writer: StreamWriter,
         ], return_when=asyncio.FIRST_COMPLETED)
 
 
-def uri(data: JsonObject) -> str:
-    return data['track']['track_resource']['uri']
-
-
-def playing(data: JsonObject) -> bool:
-    return data['playing']
-
-
-def position(data: JsonObject) -> int:
-    return int(data['playing_position'])
-
-
-async def next_safe_state(spot: Spotify) -> JsonObject:
+async def next_safe_state(spot: Spotify) -> State:
     global lock
 
-    state = await spot.get_playing(block=True)
+    data = await spot.get_playing(block=True)
     if lock.locked():
         with await lock:
-            state = await spot.get_playing()
-    return state
+            data = await spot.get_playing()
+    return State.from_json(data)
 
 
-def serialize(state: JsonObject) -> str:
-    message = {
-        'uri': uri(state),
-        'seek': position(state),
-        'pause': not playing(state)
-    }
-    return json.dumps(message)
-
-
-def encode(state: JsonObject) -> bytes:
-    return f'{serialize(state)}\n'.encode()
+def encode(state: State) -> bytes:
+    return f'{state.serialize()}\n'.encode()
 
 
 async def publish(writer: StreamWriter, spot: Spotify, *, server: bool=False
@@ -67,7 +69,7 @@ async def publish(writer: StreamWriter, spot: Spotify, *, server: bool=False
     if server:
         logger.info('Publish to newcomer')
         try:
-            writer.write(encode(await spot.get_playing()))
+            writer.write(encode(State.from_json(await spot.get_playing())))
         except KeyError:
             logger.info('Can\'t publish because no initial track')
 
@@ -83,22 +85,7 @@ async def publish(writer: StreamWriter, spot: Spotify, *, server: bool=False
             return
 
 
-class Message(NamedTuple):
-    uri: str
-    seek: int
-    pause: bool
-
-    @staticmethod
-    def from_json(state: JsonObject) -> Optional['Message']:
-        try:
-            return Message(
-                uri=uri(state), seek=position(state), pause=not playing(state)
-            )
-        except KeyError:
-            return None
-
-
-def is_update(new: Message, old: Message) -> bool:
+def is_update(new: State, old: State) -> bool:
     return (
         old is None or
         new.uri != old.uri or
@@ -107,11 +94,11 @@ def is_update(new: Message, old: Message) -> bool:
     )
 
 
-async def safe_update(message: Message, spot: Spotify) -> None:
+async def safe_update(message: State, spot: Spotify) -> None:
     global lock
 
     with await lock:
-        old_state = Message.from_json(await spot.get_playing())
+        old_state = State.from_json(await spot.get_playing())
         if is_update(message, old_state):
             await spot.play(message.uri, message.seek)
             if message.pause:
@@ -125,7 +112,7 @@ async def subscribe(reader: StreamReader, spot: Spotify) -> None:
             logger.debug(f'Waiting for Get')
             raw_message = (await reader.readline()).decode().strip()
             logger.debug(f'Get raw message {raw_message}')
-            message = Message(**json.loads(raw_message))
+            message = State(**json.loads(raw_message))
             logger.info(f'Get {message}')
 
             await safe_update(message, spot)
