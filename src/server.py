@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import StreamReader, StreamWriter
+from asyncio import StreamReader, StreamWriter, Lock
 import logging
 
 import args
@@ -14,8 +14,10 @@ LOG_FORMAT = '[%(relativeCreated)6d %(levelname)10s \
 def main(args: Arguments) -> None:
     logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
+    lock = Lock()
+
     async def serve(reader: StreamReader, writer: StreamWriter) -> None:
-        await sync.sync(args.token, reader, writer, server=True)
+        await sync.sync(args.token, reader, writer, lock, server=True)
 
     loop = asyncio.get_event_loop()
     coro = asyncio.start_server(serve, args.ip, args.port, loop=loop)

@@ -10,8 +10,6 @@ from spotify import Spotify
 
 JsonObject = Dict[str, Any]
 
-lock = Lock()
-
 logger = logging.getLogger(__name__)
 
 
@@ -51,8 +49,9 @@ class State(NamedTuple):
 class Context:
     _state: State = None
 
-    def __init__(self, *, server=False) -> None:
+    def __init__(self, lock: Lock, *, server=False) -> None:
         self._server = server
+        self.lock = lock
 
     @property
     def state(self) -> State:
@@ -65,11 +64,11 @@ class Context:
 
 
 async def sync(token: str, reader: StreamReader, writer: StreamWriter,
-               *, server: bool=False) -> None:
+               lock: Lock, *, server: bool=False) -> None:
     connector = aiohttp.TCPConnector(resolver=aiohttp.AsyncResolver())
     async with aiohttp.ClientSession(connector=connector) as session:
         spot = Spotify(session, token)
-        context = Context(server=server)
+        context = Context(lock, server=server)
         await asyncio.wait([
             publish(writer, spot, context, server=server) if server else
             subscribe(reader, spot, context)
@@ -77,11 +76,9 @@ async def sync(token: str, reader: StreamReader, writer: StreamWriter,
 
 
 async def next_safe_state(spot: Spotify, context: Context) -> Optional[State]:
-    global lock
-
     data = await spot.get_playing(block=True)
-    was_locked = lock.locked()
-    with await lock:
+    was_locked = context.lock.locked()
+    with await context.lock:
         if was_locked:
             data = await spot.get_playing()
         state = State.from_json(data)
@@ -120,9 +117,7 @@ async def publish(writer: StreamWriter, spot: Spotify, context: Context,
 
 
 async def safe_update(message: State, spot: Spotify, context: Context) -> None:
-    global lock
-
-    with await lock:
+    with await context.lock:
         old_state = State.from_json(await spot.get_playing())
         if message.is_update(old_state):
             await spot.play(message.uri, message.seek)
