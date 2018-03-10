@@ -50,7 +50,7 @@ class Context:
     _state: State = None
 
     def __init__(self, lock: Lock, *, server=False) -> None:
-        self._server = server
+        self.server = server
         self.lock = lock
 
     @property
@@ -59,7 +59,7 @@ class Context:
 
     @state.setter
     def state(self, value: State) -> None:
-        if not self._server:
+        if not self.server:
             self._state = value
 
 
@@ -70,7 +70,7 @@ async def sync(token: str, reader: StreamReader, writer: StreamWriter,
         spot = Spotify(session, token)
         context = Context(lock, server=server)
         await asyncio.wait([
-            publish(writer, spot, context, server=server) if server else
+            publish(writer, spot, context) if server else
             subscribe(reader, spot, context)
         ], return_when=asyncio.FIRST_COMPLETED)
 
@@ -93,9 +93,9 @@ def encode(state: State) -> bytes:
     return f'{state.serialize()}\n'.encode()
 
 
-async def publish(writer: StreamWriter, spot: Spotify, context: Context,
-                  *, server: bool=False) -> None:
-    if server:
+async def publish(writer: StreamWriter, spot: Spotify,
+                  context: Context) -> None:
+    if context.server:
         logger.info('Publish to newcomer')
         try:
             writer.write(encode(State.from_json(await spot.get_playing())))
