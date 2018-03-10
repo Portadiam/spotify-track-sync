@@ -87,7 +87,8 @@ async def next_safe_state(spot: Spotify, context: Context) -> Optional[State]:
         state = State.from_json(data)
         if not state.is_update(context.state):
             state = None
-        context.state = None
+        else:
+            context.state = None
     return state
 
 
