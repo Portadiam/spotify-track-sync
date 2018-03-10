@@ -37,6 +37,13 @@ class State(NamedTuple):
     def serialize(self) -> str:
         return json.dumps(self.json())
 
+    def is_update(self, old: 'State') -> bool:
+        return (
+                self.is_distinct(old) or
+                abs(self.seek - old.seek) > 5 or
+                self.pause != old.pause
+        )
+
 
 class Context:
     _state: State = None
@@ -75,7 +82,7 @@ async def next_safe_state(spot: Spotify, context: Context) -> Optional[State]:
         if was_locked:
             data = await spot.get_playing()
         state = State.from_json(data)
-        if not is_update(state, context.state):
+        if not state.is_update(context.state):
             state = None
         context.state = None
     return state
@@ -108,21 +115,12 @@ async def publish(writer: StreamWriter, spot: Spotify, context: Context,
             return
 
 
-def is_update(new: State, old: State) -> bool:
-    return (
-        old is None or
-        new.uri != old.uri or
-        abs(new.seek - old.seek) > 5 or
-        new.pause != old.pause
-    )
-
-
 async def safe_update(message: State, spot: Spotify, context: Context) -> None:
     global lock
 
     with await lock:
         old_state = State.from_json(await spot.get_playing())
-        if is_update(message, old_state):
+        if message.is_update(old_state):
             await spot.play(message.uri, message.seek)
             if message.pause:
                 await spot.pause()
