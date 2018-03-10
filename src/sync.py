@@ -37,6 +37,9 @@ class State(NamedTuple):
     def serialize(self) -> str:
         return json.dumps(self.json())
 
+    def is_distinct(self, old: 'State') -> bool:
+        return old is None or self.uri != old.uri
+
     def is_update(self, old: 'State') -> bool:
         return (
             self.is_distinct(old) or
