@@ -38,8 +38,20 @@ class State(NamedTuple):
         return json.dumps(self.json())
 
 
-class LocalState:
-    state: State = None
+class Context:
+    _state: State = None
+
+    def __init__(self, *, server=False) -> None:
+        self._server = server
+
+    @property
+    def state(self) -> State:
+        return self._state
+
+    @state.setter
+    def state(self, value: State) -> None:
+        if not self._server:
+            self._state = value
 
 
 async def sync(token: str, reader: StreamReader, writer: StreamWriter,
@@ -47,19 +59,14 @@ async def sync(token: str, reader: StreamReader, writer: StreamWriter,
     connector = aiohttp.TCPConnector(resolver=aiohttp.AsyncResolver())
     async with aiohttp.ClientSession(connector=connector) as session:
         spot = Spotify(session, token)
-        received_state = LocalState()
-        # Detach publish and subscribe LocalState if this is the server
-        # This is to allow the server to propagate updates to other clients
-        received_state_publish = LocalState() if server else received_state
+        context = Context(server=server)
         await asyncio.wait([
-            publish(writer, spot, received_state_publish, server=server)
-            if server else
-            subscribe(reader, spot, received_state)
+            publish(writer, spot, context, server=server) if server else
+            subscribe(reader, spot, context)
         ], return_when=asyncio.FIRST_COMPLETED)
 
 
-async def next_safe_state(spot: Spotify, received_state: LocalState
-                          ) -> Optional[State]:
+async def next_safe_state(spot: Spotify, context: Context) -> Optional[State]:
     global lock
 
     data = await spot.get_playing(block=True)
@@ -68,9 +75,9 @@ async def next_safe_state(spot: Spotify, received_state: LocalState
         if was_locked:
             data = await spot.get_playing()
         state = State.from_json(data)
-        if not is_update(state, received_state.state):
+        if not is_update(state, context.state):
             state = None
-        received_state.state = None
+        context.state = None
     return state
 
 
@@ -78,8 +85,8 @@ def encode(state: State) -> bytes:
     return f'{state.serialize()}\n'.encode()
 
 
-async def publish(writer: StreamWriter, spot: Spotify,
-                  received_state: LocalState, *, server: bool=False) -> None:
+async def publish(writer: StreamWriter, spot: Spotify, context: Context,
+                  *, server: bool=False) -> None:
     if server:
         logger.info('Publish to newcomer')
         try:
@@ -90,7 +97,7 @@ async def publish(writer: StreamWriter, spot: Spotify,
     while True:
         try:
             logger.info('Publish waiting')
-            state = await next_safe_state(spot, received_state)
+            state = await next_safe_state(spot, context)
             if state is not None:
                 writer.write(encode(state))
         except KeyError:
@@ -110,8 +117,7 @@ def is_update(new: State, old: State) -> bool:
     )
 
 
-async def safe_update(message: State, spot: Spotify,
-                      received_state: LocalState) -> None:
+async def safe_update(message: State, spot: Spotify, context: Context) -> None:
     global lock
 
     with await lock:
@@ -120,11 +126,11 @@ async def safe_update(message: State, spot: Spotify,
             await spot.play(message.uri, message.seek)
             if message.pause:
                 await spot.pause()
-            received_state.state = message
+            context.state = message
 
 
 async def subscribe(reader: StreamReader, spot: Spotify,
-                    received_state: LocalState) -> None:
+                    context: Context) -> None:
     logger.info('Subscribe ready')
     while True:
         try:
@@ -134,7 +140,7 @@ async def subscribe(reader: StreamReader, spot: Spotify,
             message = State(**json.loads(raw_message))
             logger.info(f'Get {message}')
 
-            await safe_update(message, spot, received_state)
+            await safe_update(message, spot, context)
         except ConnectionResetError:
             logger.warning('ConnectionResetError during loop')
             return
