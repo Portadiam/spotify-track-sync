@@ -39,9 +39,9 @@ class State(NamedTuple):
 
     def is_update(self, old: 'State') -> bool:
         return (
-                self.is_distinct(old) or
-                abs(self.seek - old.seek) > 5 or
-                self.pause != old.pause
+            self.is_distinct(old) or
+            abs(self.seek - old.seek) > 5 or
+            self.pause != old.pause
         )
 
 
