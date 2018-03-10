@@ -48,8 +48,12 @@ async def sync(token: str, reader: StreamReader, writer: StreamWriter,
     async with aiohttp.ClientSession(connector=connector) as session:
         spot = Spotify(session, token)
         received_state = LocalState()
+        # Detach publish and subscribe LocalState if this is the server
+        # This is to allow the server to propagate updates to other clients
+        received_state_publish = LocalState() if server else received_state
         await asyncio.wait([
-            publish(writer, spot, received_state, server=server) if server else
+            publish(writer, spot, received_state_publish, server=server)
+            if server else
             subscribe(reader, spot, received_state)
         ], return_when=asyncio.FIRST_COMPLETED)
 
