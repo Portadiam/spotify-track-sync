@@ -2,14 +2,13 @@ import asyncio
 from asyncio import StreamReader, StreamWriter, Lock
 import aiohttp
 import logging
-from typing import Dict, Any, Callable, Awaitable, NamedTuple, Optional
+from typing import Dict, Any, NamedTuple, Optional
 import json
 
 from spotify import Spotify
 
 
 JsonObject = Dict[str, Any]
-ChangeFunc = Callable[[Spotify], Awaitable]
 
 lock = Lock()
 
