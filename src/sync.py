@@ -47,11 +47,18 @@ class State(NamedTuple):
 
 
 class Context:
+    _next_id: int = 0
     _state: State = None
 
+    lock: Lock
+    server: bool
+
     def __init__(self, lock: Lock, *, server=False) -> None:
-        self.server = server
+        self.id = Context._next_id
+        Context._next_id += 1
         self.lock = lock
+        self.server = server
+        self._master = server
 
     @property
     def state(self) -> State:
@@ -61,6 +68,20 @@ class Context:
     def state(self, value: State) -> None:
         if not self.server:
             self._state = value
+
+    @property
+    def master(self) -> bool:
+        return self._master
+
+    @master.setter
+    def master(self, master: bool) -> None:
+        if self._master != master:
+            logger.info(f'Context {self.id} master {master}')
+            self._master = master
+
+    def set_master(self, master, new_state: State) -> None:
+        if new_state.is_distinct(self.state):
+            self.master = master
 
 
 async def sync(token: str, reader: StreamReader, writer: StreamWriter,
@@ -85,6 +106,7 @@ async def next_safe_state(spot: Spotify, context: Context) -> Optional[State]:
         if not state.is_update(context.state):
             state = None
         else:
+            context.set_master(True, state)
             context.state = None
     return state
 
@@ -120,6 +142,7 @@ async def safe_update(message: State, spot: Spotify, context: Context) -> None:
     with await context.lock:
         old_state = State.from_json(await spot.get_playing())
         if message.is_update(old_state):
+            context.set_master(False, message)
             await spot.play(message.uri, message.seek)
             if message.pause:
                 await spot.pause()
