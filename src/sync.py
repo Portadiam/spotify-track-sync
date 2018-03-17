@@ -96,8 +96,9 @@ async def sync(token: str, reader: StreamReader, writer: StreamWriter,
         ], return_when=asyncio.FIRST_COMPLETED)
 
 
-async def next_safe_state(spot: Spotify, context: Context) -> Optional[State]:
-    data = await spot.get_playing(block=True)
+async def next_safe_state(spot: Spotify, context: Context,
+                          *, block: bool=True) -> Optional[State]:
+    data = await spot.get_playing(block=block)
     was_locked = context.lock.locked()
     with await context.lock:
         if was_locked:
@@ -119,10 +120,9 @@ async def publish(writer: StreamWriter, spot: Spotify,
                   context: Context) -> None:
     if context.server:
         logger.info('Publish to newcomer')
-        try:
-            writer.write(encode(State.from_json(await spot.get_playing())))
-        except AttributeError:
-            logger.warning('Can\'t publish because no initial track')
+        state = await next_safe_state(spot, context, block=False)
+        if state is not None:
+            writer.write(encode(state))
 
     while True:
         try:
