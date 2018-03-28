@@ -46,6 +46,7 @@ class Spotify:
         }
         result = await self._request('remote/status.json', args)
         logging.debug(f'Got track response')
+        logging.debug(pformat(result))
         return result
 
     async def play(self, uri: str, time: int=0, pause=False) -> JsonObject:

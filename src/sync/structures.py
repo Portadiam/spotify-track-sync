@@ -19,7 +19,7 @@ class State(NamedTuple):
         try:
             return State(
                 uri=state['track']['track_resource']['uri'],
-                seek=int(state['position']),
+                seek=int(state['playing_position']),
                 pause=not state['playing']
             )
         except KeyError:
