@@ -26,5 +26,5 @@ def get() -> Arguments:
     args = parser.parse_args()
     if args.token == '':
         webbrowser.open('https://open.spotify.com/token', autoraise=True)
-        args.token = input('Please enter token: ')
+        args.token = input('Please enter token: ').strip()
     return args
